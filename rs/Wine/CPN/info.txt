@@ -1,0 +1,17 @@
+/usr/local/bin/python3.6 /home/spec/PycharmProjects/NN-Data-Classification/main_example.py
+TRAIN | Epoch: 1 | Loss: 0.02247191011235955 | Accuracy: 0.9775280898876404
+TRAIN | Epoch: 2 | Loss: 0.028089887640449437 | Accuracy: 0.9719101123595506
+TRAIN | Epoch: 3 | Loss: 0.033707865168539325 | Accuracy: 0.9662921348314607
+TRAIN | Epoch: 4 | Loss: 0.06741573033707865 | Accuracy: 0.9325842696629213
+TRAIN | Epoch: 5 | Loss: 0.025280898876404494 | Accuracy: 0.9719101123595506
+TRAIN | Epoch: 6 | Loss: 0.028089887640449437 | Accuracy: 0.9719101123595506
+TRAIN | Epoch: 7 | Loss: 0.0056179775280898875 | Accuracy: 0.9943820224719101
+TRAIN | Epoch: 8 | Loss: 0.0056179775280898875 | Accuracy: 0.9943820224719101
+TRAIN | Epoch: 9 | Loss: 0.0056179775280898875 | Accuracy: 0.9943820224719101
+TRAIN | Epoch: 10 | Loss: 0.0056179775280898875 | Accuracy: 0.9943820224719101
+TRAIN | Epoch: 11 | Loss: 0.0 | Accuracy: 1.0
+Train loss goal and train accuracy goal are reached
+Time: 2.61339285199999 seconds
+TRAIN RESULTS
+Loss: 0.0
+Accuracy (%): 100.0

@@ -34,10 +34,7 @@ def xavier_normal_normalized(shape: tuple):
     Xavier Glorot normal normalized initializer for activations Linear, Sigmoid and Tanh (not for ReLU)
     https://machinelearningmastery.com/weight-initialization-for-deep-learning-neural-networks/
     """
-    if len(shape) == 1:
-        return xavier_normal(shape)
-    return np.random.randn(*shape) * np.sqrt(1. / (shape[0] + shape[1]))
-
+    return np.random.randn(*shape) * np.sqrt(1. / np.sum(shape))
 
 def xavier_uniform(shape: tuple, low=0., high=1.):
     """
@@ -52,9 +49,7 @@ def xavier_uniform_normalized(shape: tuple, low=0., high=1.):
     Xavier Glorot uniform normalized initializer for activations Linear, Sigmoid and Tanh (not for ReLU)
     https://machinelearningmastery.com/weight-initialization-for-deep-learning-neural-networks/
     """
-    if len(shape) == 1:
-        return xavier_uniform(shape)
-    return np.random.uniform(low=low, high=high, size=shape) * np.sqrt(1. / (shape[0] + shape[1]))
+    return np.random.uniform(low=low, high=high, size=shape) * np.sqrt(1. / np.sum(shape))
 
 
 def he_uniform(shape: tuple, low=0., high=1.):

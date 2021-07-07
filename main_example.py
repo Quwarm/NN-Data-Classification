@@ -1,19 +1,19 @@
-import os
 import json
+import os
 import platform
 from copy import deepcopy
-from time import process_time
+from time import perf_counter
 
 import seaborn as sn
 from matplotlib import pyplot as plt
 
 from datasets import *
-from mlp import Dense
+from mlp import Dense, ReluLayer, LeakyReluLayer, SwishLayer, Dropout
 from mlp import Euclidean, Octile, Manhattan, Chebyshev
 from mlp import GradientDescent, GradientDescentMomentum, AdaGrad, AdaDelta, RMSprop, Adam, AdaMax
-from mlp import Linear, Sigmoid, ReLU, Tanh, SoftMax, HardLim
+from mlp import Linear, Sigmoid, Relu, Tanh, SoftMax, HardLim
 from mlp import MLPClassifier, CPClassifier
-from mlp import MSE, SSE, MAE, SAE, SDE
+from mlp import MSE, SSE, MAE, SAE, SMCE
 from mlp import xavier_uniform, xavier_uniform_normalized, he_normal, he_uniform
 from mlp import zeros, ones, std_normal, xavier_normal, xavier_normal_normalized, full
 
@@ -125,14 +125,14 @@ def enter_optimizer():
     ][enter_number('#>', 1, 7, int) - 1]
 
 
-def enter_loss_function():
-    print("Loss functions:\n1. MSE\n2. SSE\n3. MAE\n4. SAE\n5. SDE")
-    return [MSE(), SSE(), MAE(), SAE(), SDE()][enter_number('#>', 1, 5, int) - 1]
+def enter_loss_function(smce):
+    print("Loss functions:\n1. MSE\n2. SSE\n3. MAE\n4. SAE" + "\n5. SoftMaxCrossEntropy" * int(smce))
+    return [MSE(), SSE(), MAE(), SAE(), SMCE()][enter_number('#>', 1, 4 + int(smce), int) - 1]
 
 
 def enter_activation_function():
     print("Activation functions:\n1. Linear\n2. Sigmoid\n3. ReLU\n4. Tanh\n5. SoftMax\n6. HardLim")
-    return [Linear(), Sigmoid(), ReLU(), Tanh(), SoftMax(), HardLim()][enter_number('#>', 1, 6, int) - 1]
+    return [Linear(), Sigmoid(), Relu(), Tanh(), SoftMax(), HardLim()][enter_number('#>', 1, 6, int) - 1]
 
 
 def enter_bool(message):
@@ -265,8 +265,8 @@ def main():
     def reset():
         nonlocal train_x, train_y, test_x, test_y, n_classes
         nonlocal train_samples, test_samples, train_accuracy, train_loss
-        nonlocal test_accuracy, test_loss, train_accuracy_goal, train_loss_goal
-        nonlocal test_accuracy_goal, test_loss_goal
+        nonlocal test_accuracy, test_loss, train_accuracy_goal
+        nonlocal test_accuracy_goal
         train_x, train_y, test_x, test_y, n_classes = [], [], [], [], 0
         train_samples = 0
         test_samples = 0
@@ -275,9 +275,7 @@ def main():
         test_accuracy = 0.
         test_loss = np.inf
         train_accuracy_goal = 1.
-        train_loss_goal = 0.
         test_accuracy_goal = 1.
-        test_loss_goal = 0.
 
     def show_confusion_matrix_ex(n_classes, y_predicted, y_true, s):
         train_y_typename = train_y.dtype.type.__name__
@@ -410,11 +408,11 @@ def main():
     test_accuracy = 0.
     test_loss = np.inf
     train_accuracy_goal = 1.
-    train_loss_goal = 0.
     test_accuracy_goal = 1.
-    test_loss_goal = 0.
+    parameters = 0
+    cur_is_renderable = False
     output_classes_filename = 'output_classes.txt'
-    best_choice = frozenset({'train_loss', 'train_accuracy'})
+    best_choice = frozenset({'train_accuracy'})
     while True:
         os.system(clear_command)
         if n_classes == 0:
@@ -433,26 +431,34 @@ def main():
             if menu_item == '1':
                 filename = input("Filename (train data):")
                 train_x, train_y, n_classes = load_csv(filename)
+                best_choice = frozenset({'train_accuracy'})
                 if n_classes > 0:
                     test_x, test_y, _ = load_csv(input("Filename (test data) or empty string:"))
+                    best_choice = frozenset({'test_accuracy'})
                     chosen_dataset = filename
             elif menu_item == '2':
                 train_x, train_y, test_x, test_y, n_classes = load_mnist()
+                best_choice = frozenset({'test_accuracy'})
                 chosen_dataset = 'MNIST'
             elif menu_item == '3':
                 train_x, train_y, test_x, test_y, n_classes = load_emnist_digits()
+                best_choice = frozenset({'test_accuracy'})
                 chosen_dataset = 'EMNIST Digits'
             elif menu_item == '4':
                 train_x, train_y, test_x, test_y, n_classes = load_emnist_letters()
+                best_choice = frozenset({'test_accuracy'})
                 chosen_dataset = 'EMNIST Letters'
             elif menu_item == '5':
                 train_x, train_y, test_x, test_y, n_classes = load_emnist_balanced()
+                best_choice = frozenset({'test_accuracy'})
                 chosen_dataset = 'EMNIST Balanced'
             elif menu_item == '6':
                 train_x, train_y, n_classes = load_wine()
+                best_choice = frozenset({'train_accuracy'})
                 chosen_dataset = 'Wine'
             elif menu_item == '7':
                 train_x, train_y, n_classes = load_iris()
+                best_choice = frozenset({'train_accuracy'})
                 chosen_dataset = 'Iris'
             train_samples = min(len(train_x), len(train_y))
             if train_samples > 0:
@@ -469,7 +475,9 @@ def main():
                                     neural_network = MLPClassifier(n_inputs=0, optimizer=None, loss_function=None)
                                 elif dictionary['classifier'] == 'cp_classifier':
                                     neural_network = CPClassifier(n_inputs=0, kohonen_neurons=0, grossberg_neurons=0,
-                                                                  loss_function=None, distance_function=None)
+                                                                  loss_function=None, distance_function=None,
+                                                                  kohonen_kernel_initializer=None,
+                                                                  grossberg_kernel_initializer=None)
                                 else:
                                     input("Invalid classifier name")
                                     reset()
@@ -490,6 +498,8 @@ def main():
                                         losses, correct_answers = neural_network.evaluate(test_x, test_y)
                                         test_loss = losses.mean()
                                         test_accuracy = correct_answers * 100 / test_samples
+                                cur_is_renderable = is_renderable(train_x[0])
+                                parameters = neural_network.count_parameters()
                                 continue
                     except OSError as error:
                         print(error)
@@ -506,27 +516,41 @@ def main():
                         reset()
                         input("Go to menu>>")
                         continue
-                loss = enter_loss_function()
                 print("Neural networks:\n1. MLPClassifier\n2. CPClassifier")
                 neural_network_type = enter_number("#>", 1, 2, int)
+                loss = enter_loss_function(neural_network_type == 1)
                 print(neural_network_type.__repr__())
                 if neural_network_type == 1:
                     optimizer = enter_optimizer()
                     neural_network = MLPClassifier(n_inputs=features, optimizer=optimizer, loss_function=loss)
-                    n_layers = enter_number("Enter number of hidden layers (1 - 5):", 1, 5, int)
+                    n_layers = enter_number("Enter number of hidden layers (1 - 20):", 1, 20, int)
                     for i_layer in range(1, n_layers + 1):
                         print(i_layer, "layer")
-                        if i_layer != n_layers:
-                            units = enter_number("Enter units (1 - 10000):", 1, 10000, int)
-                        else:
-                            units = n_classes
-                            print("Units:", n_classes)
-                        activation = enter_activation_function()
-                        kernel_initializer = enter_initializer("Enter kernel initializer")
-                        bias_initializer = enter_initializer("Enter bias initializer")
-                        neural_network.add(
-                            Dense(output_units=units, activation=activation, kernel_initializer=kernel_initializer,
-                                  bias_initializer=bias_initializer))
+                        print("Type of layer:\n1. Dense\n2. Relu\n3. LeakyRelu\n4. Swish\n5. Dropout")
+                        layer_type = enter_number("#>", 1, 2, int)
+                        if layer_type == 1:
+                            if i_layer != n_layers:
+                                units = enter_number("Enter units (1 - 10000):", 1, 10000, int)
+                            else:
+                                units = n_classes
+                                print("Units:", n_classes)
+                            activation = enter_activation_function()
+                            kernel_initializer = enter_initializer("Enter kernel initializer")
+                            bias_initializer = enter_initializer("Enter bias initializer")
+                            neural_network.add(
+                                Dense(output_units=units, activation=activation, kernel_initializer=kernel_initializer,
+                                      bias_initializer=bias_initializer))
+                        elif layer_type == 2:
+                            neural_network.add(ReluLayer(output_units=neural_network.layers[-1].units))
+                        elif layer_type == 3:
+                            negative_slope = enter_number('Negative slope', 0, 1, float)
+                            neural_network.add(LeakyReluLayer(negative_slope=negative_slope,
+                                                              output_units=neural_network.layers[-1].units))
+                        elif layer_type == 4:
+                            neural_network.add(SwishLayer(output_units=neural_network.layers[-1].units))
+                        elif layer_type == 5:
+                            dropout = enter_number('Enter dropout coefficient:', 0, 0.99, float)
+                            neural_network.add(Dropout(dropout))
                 elif neural_network_type == 2:
                     kohonen_neurons = enter_number('Kohonen neurons (1-1000000):', 1, 1000000, int)
                     distance_function = enter_distance_function()
@@ -539,6 +563,8 @@ def main():
                                                   distance_function=distance_function,
                                                   kohonen_kernel_initializer=kohonen_kernel_initializer,
                                                   grossberg_kernel_initializer=grossberg_kernel_initializer)
+                cur_is_renderable = is_renderable(train_x[0])
+                parameters = neural_network.count_parameters()
                 print("Neural network is ready")
         elif train_samples > 0 and n_classes > 0:
             print(neural_network)
@@ -548,6 +574,7 @@ def main():
                 print("Test samples:", test_samples, '[enter "test show/predict n" to show/predict n test sample]')
             print("Features:", features)
             print("Classes:", n_classes)
+            print("Trainable params:", parameters)
             print("Current train accuracy:", train_accuracy)
             print("Current train loss:", train_loss)
             if test_samples > 0:
@@ -558,14 +585,12 @@ def main():
                 print("3. Calc accuracy and loss of train data")
                 print("4. Calc accuracy and loss of test data")
                 print("5. Output train and test")
-                if is_renderable(train_x[0]):
-                    print("X. Experiments")
             else:
                 print("1. Train")
                 print("2. Calc accuracy and loss of train data")
                 print("3. Output train")
-                if is_renderable(train_x[0]):
-                    print("X. Experiments")
+            if cur_is_renderable:
+                print("X. Experiments")
             menu_item = input("#>").lower()
             menu_item_split = menu_item.split()
             if len(menu_item_split) == 3:
@@ -614,7 +639,7 @@ def main():
                                 with open(output_filename, 'w') as fp:
                                     for row_x, row_y in zip(
                                             test_x[:n_export_samples].reshape(n_export_samples, np.product(
-                                                    test_x.shape[1:])), test_y[:n_export_samples]):
+                                                test_x.shape[1:])), test_y[:n_export_samples]):
                                         fp.write(','.join(str(x) for x in row_x))
                                         fp.write(',' + str(row_y) + '\n')
                                 print("Test data were exported to", output_filename)
@@ -639,35 +664,28 @@ def main():
                     glr = enter_number(f'Enter grossberg learning rate (0.000001 - 10):', 0.000001, 10., float)
                     optimize = enter_bool("Use optimization?")
                 shuffle = enter_bool("Shuffle?")
-                use_best_result = enter_bool("Use best result after finish?")
                 print("Train accuracy goal is", train_accuracy_goal)
-                print("Train loss goal is", train_loss_goal)
                 if has_test:
                     print("Test accuracy goal is", test_accuracy_goal)
-                    print("Test loss goal is", test_loss_goal)
                 if enter_bool("Edit?"):
-                    train_accuracy_goal = enter_number("Enter train accuracy goal (0 - 2):", 0., 2., float)
-                    train_loss_goal = enter_number("Enter train loss goal (-1 - 1):", -1., 1., float)
+                    train_accuracy_goal = enter_number("Enter train accuracy goal (0 - 1 or 2 [ignore]):", 0., 2.,
+                                                       float)
                     if has_test:
-                        test_accuracy_goal = enter_number("Enter test accuracy goal (0 - 2):", 0., 2., float)
-                        test_loss_goal = enter_number("Enter test loss goal (-1 - 1):", -1., 1., float)
+                        test_accuracy_goal = enter_number("Enter test accuracy goal (0 - 1 or 2 [ignore]):", 0., 2.,
+                                                          float)
                 print("Choice:", *best_choice)
                 if enter_bool("Edit?"):
-                    choices = ['train_loss', 'train_accuracy', 'test_loss', 'test_accuracy'] \
-                        if has_test else ['train_loss', 'train_accuracy']
+                    choices = ['train_accuracy', 'test_accuracy'] if has_test else ['train_accuracy']
                     best_choice = frozenset(t for t in choices if enter_bool(f"Choose {t}?"))
                     print("Best choice:", *best_choice)
-                time_start = process_time()
+                time_start = perf_counter()
                 try:
                     if isinstance(neural_network, MLPClassifier):
                         result = neural_network.fit(train_x, train_y, epochs, lr,
                                                     test_x=test_x, test_y=test_y, test_folds=test_folds,
                                                     verbose=verbose, batch_size=batch_size, shuffle=shuffle,
                                                     train_accuracy_goal=train_accuracy_goal,
-                                                    train_loss_goal=train_loss_goal,
                                                     test_accuracy_goal=test_accuracy_goal,
-                                                    test_loss_goal=test_loss_goal,
-                                                    use_best_result=use_best_result,
                                                     best_choice=best_choice)
                     else:
                         result = neural_network.fit(train_x, train_y, epochs,
@@ -676,17 +694,14 @@ def main():
                                                     test_x=test_x, test_y=test_y, test_folds=test_folds,
                                                     verbose=verbose, shuffle=shuffle,
                                                     train_accuracy_goal=train_accuracy_goal,
-                                                    train_loss_goal=train_loss_goal,
                                                     test_accuracy_goal=test_accuracy_goal,
-                                                    test_loss_goal=test_loss_goal,
-                                                    use_best_result=use_best_result,
                                                     best_choice=best_choice,
                                                     optimize=optimize)
                 except BaseException:
                     traceback.print_exc()
                     input("Go to menu>>")
                     continue
-                time_stop = process_time()
+                time_stop = perf_counter()
                 print("Time:", time_stop - time_start, "seconds")
                 epochs_passed, train_loss_curve, train_accuracy_curve, test_loss_curve, test_accuracy_curve = result
                 if epochs_passed >= 2:
@@ -761,14 +776,17 @@ def main():
                     print("The classification data was saved to", output_classes_filename)
                 else:
                     print("Train accuracy <= 0 or train loss == infinity")
-            elif menu_item == 'x' and is_renderable(train_x[0]):
+            elif menu_item == 'x' and cur_is_renderable:
                 if train_accuracy > 0. and train_loss < np.inf:
-                    print("1. Experiments on train data\n2. Experiments on test data")
-                    b_samples = enter_number("#>", 1, 2, int)
-                    if b_samples == 1:
-                        do_experiment(train_x, train_y, n_classes)
+                    if test_samples > 0:
+                        print("1. Experiments on train data\n2. Experiments on test data\n3. Experiments on all data")
+                        b_samples = enter_number("#>", 1, 3, int)
+                        if b_samples in [1, 3]:
+                            do_experiment(train_x, train_y, n_classes)
+                        if b_samples in [2, 3]:
+                            do_experiment(test_x, test_y, n_classes)
                     else:
-                        do_experiment(test_x, test_y, n_classes)
+                        do_experiment(train_x, train_y, n_classes)
                 else:
                     print("Train accuracy <= 0 or train loss == infinity")
         else:

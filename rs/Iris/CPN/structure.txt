@@ -1,0 +1,10 @@
+Loss: MSE
+Kohonen learning rate: 0.7
+Grossberg learning rate: 0.1
+Max epochs: 100
+Shuffle: true
+Best choice: train_accuracy
+Optimize: true
+Layers:
+1. Kohonen(units=150, weights_initializer='ones', distance_function='euclidean')
+2. Grossberg(units=3, weights_initializer='ones')

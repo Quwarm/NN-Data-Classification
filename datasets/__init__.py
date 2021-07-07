@@ -7,12 +7,12 @@ import sklearn.datasets as sklearn_datasets
 
 
 def load_mnist():
+    import tensorflow as tf
     """
     Load MNIST
     :return: training inputs, training outputs, test inputs, test outputs, number of classes
     """
-    training_images, training_labels = emnist.extract_training_samples('mnist')
-    test_images, test_labels = emnist.extract_test_samples('mnist')
+    (training_images, training_labels), (test_images, test_labels) = tf.keras.datasets.mnist.load_data()
     return training_images, training_labels, test_images, test_labels, len(set(training_labels))
 
 

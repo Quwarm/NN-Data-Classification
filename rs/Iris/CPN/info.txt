@@ -1,0 +1,10 @@
+TRAIN | Epoch: 0 | Loss: 0.0044444444444444444 | Accuracy: 0.3333333333333333
+TRAIN | Epoch: 1 | Loss: 0.008888888888888889 | Accuracy: 1.0
+Train accuracy goal is reached
+Time: 0.04173299705144018 seconds
+Do you want to save the parameters of the neural network to file? [y/n]:y
+Filename:settings.json
+Neural network parameters were saved to settings.json
+TRAIN RESULTS
+Loss: 0.008888888888888889
+Accuracy (%): 100.0

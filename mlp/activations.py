@@ -37,7 +37,7 @@ class Sigmoid:
         return 'sigmoid'
 
 
-class ReLU:
+class Relu:
     # Activation function for hidden layer (Multilayer Perceptron, Convolutional Neural Network)
     # https://stats.stackexchange.com/q/333394
     out_min_max = [0., np.inf]
@@ -79,8 +79,13 @@ class SoftMax:
 
     def __call__(self, x):
         # https://machinelearningmastery.com/softmax-activation-function-with-python/
-        exp_x = np.exp(x)
-        return exp_x / np.sum(exp_x, axis=0)
+        # https://stackoverflow.com/a/39558290
+        s = np.max(x, axis=1)
+        s = s.reshape(s.shape[0], -1)
+        e_x = np.exp(x - s)
+        div = np.sum(e_x, axis=1)
+        div = div.reshape(div.shape[0], -1)
+        return e_x / div
 
     def deriv(self, y):
         return y * (1. - y)  # stub
@@ -109,7 +114,7 @@ class HardLim:
 activation_functions = {
     'linear': Linear,
     'sigmoid': Sigmoid,
-    'relu': ReLU,
+    'relu': Relu,
     'tanh': Tanh,
     'softmax': SoftMax,
     'hardlim': HardLim

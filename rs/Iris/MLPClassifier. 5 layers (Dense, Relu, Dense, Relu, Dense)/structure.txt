@@ -1,0 +1,13 @@
+Loss: SoftMaxCrossEntropy
+Optimizer: AdaDelta
+Learning rate: 10
+Batch size: 150
+Max epochs: 100000
+Shuffle: true
+Best choice: train_accuracy
+Layers:
+1. Dense(units=6, activation='linear', kernel_initializer='xavier_normal_normalized', bias_initializer='xavier_normal_normalized')
+2. ReluLayer()
+3. Dense(units=6, activation='linear', kernel_initializer='xavier_normal_normalized', bias_initializer='xavier_normal_normalized')
+4. ReluLayer()
+5. Dense(units=3, activation='linear', kernel_initializer='xavier_normal_normalized', bias_initializer='xavier_normal_normalized')

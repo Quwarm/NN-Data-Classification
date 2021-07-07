@@ -48,8 +48,10 @@ class MLPClassifier:
                 self.layers.append(layer)
             self.prepared_data.set_parameters(dictionary.get('prepared_data'))
 
+    def count_parameters(self):
+        return np.sum([layer.count_parameters() for layer in self.layers])
+
     def add(self, layer, optimizer=None):
-        assert layer.name() == 'dense', "MLPClassifier only supports dense layers"
         layer.set_input(self.layers[-1].units if self.layers else self.n_inputs,
                         get_optimizer_function(optimizer) if optimizer else self.optimizer)
         self.layers.append(layer)
@@ -63,39 +65,27 @@ class MLPClassifier:
         for i, input_ in enumerate(inputs):
             predicted = input_
             for layer in self.layers:
-                predicted = layer.forward(predicted)
+                predicted = layer.forward(predicted, is_training=False)
             outputs.append(predicted)
         return [self.prepared_data.matching_y_bidict.get(i) for i in range(self.layers[-1].units)], outputs
 
     def predict_classes(self, inputs, *, _input_is_prepared=False):
         if not _input_is_prepared:
             inputs = self.prepared_data.prepare_x(inputs)
-        outputs = []
-        for i, input_ in enumerate(inputs):
-            predicted = input_
-            for layer in self.layers:
-                predicted = layer.forward(predicted)
-            outputs.append(self.prepared_data.to_class_name(predicted.argmax(axis=0)[0]))
-        return outputs
+        input_ = inputs
+        for i, layer in enumerate(self.layers):
+            input_ = layer.forward(input_, is_training=False)
+        return self.prepared_data.to_class_name(input_.argmax(axis=1))
 
     def evaluate(self, inputs, outputs, *, _input_is_prepared=False, _output_is_prepared=False):
         if not _input_is_prepared:
             inputs = self.prepared_data.prepare_x(inputs)
         if not _output_is_prepared:
             outputs = self.prepared_data.prepare_y(outputs)
-        predicted_outputs = []
-        for i, input_ in enumerate(inputs):
-            predicted = input_
-            for layer in self.layers:
-                predicted = layer.forward(predicted)
-            predicted_outputs.append(predicted.argmax(axis=0)[0])
-        losses = []
-        correct_answers = 0
-        for input_, output_, predicted_ in zip(inputs, outputs, predicted_outputs):
-            losses.append(self.loss_function(output_, predicted_))
-            if output_ == predicted_:
-                correct_answers += 1
-        return np.asarray(losses), correct_answers
+        input_ = inputs
+        for i, layer in enumerate(self.layers):
+            input_ = layer.forward(input_, is_training=False)
+        return self.loss_function(outputs, input_), np.sum(outputs == input_.argmax(axis=1))
 
     def get_weights_and_biases(self):
         return deepcopy([(layer.weights, layer.biases) for layer in self.layers])
@@ -105,95 +95,73 @@ class MLPClassifier:
             layer.weights = weights
             layer.biases = biases
 
-    def _backpropagation(self, x, y_true):
-        # Списки, который будет содержать градиент, вычисленный с помощью backpropagation
-        gradient_b = [np.zeros_like(layer.biases) for layer in self.layers]
-        gradient_w = [np.zeros_like(layer.weights) for layer in self.layers]
-        # Список активаций будет хранить все последующие слои активации
-        # Первый слой активации -- пиксели изображения
-        activations = [x]
-        # Заполняем список activations, проходя по сети
-        for i, layer in enumerate(self.layers):
-            activations.append(layer.forward(activations[-1]))
-        output = activations[-1]
-        y_true_vector = np.zeros_like(output)
-        if output.shape[0] == 1:
-            y_true_vector[0] = y_true
-        else:
-            y_true_vector[y_true] = 1.
-        # Учет дельты по последнему слою
-        delta = self.loss_function.deriv(y_true_vector, output) * self.layers[-1].activation.deriv(output)
-        # Заполнение списка градиентов для последнего слоя напрямую
-        gradient_b[-1] = delta
-        gradient_w[-1] = np.dot(delta, activations[-2].T)
-        # Переход от предпоследнего слоя сети к первому с вычислением градиента по каждой итерации
-        for i in range(2, len(self.layers) + 1):
-            z = activations[-i]
-            act_der = self.layers[-i + 1].activation.deriv(z)
-            delta = np.dot(self.layers[-i + 1].weights.T, delta) * act_der
-            gradient_b[-i] = delta
-            gradient_w[-i] = np.dot(delta, activations[-i - 1].T)
-        # Normal indexing variant (slowly):
-        # for i in range(len(self.layers) - 1, 0, -1):
-        #     z = activations[i]
-        #     act_der = self.layers[i].activation.deriv(z)
-        #     delta = np.dot(self.layers[i].weights.T, delta) * act_der
-        #     gradient_b[i - 1] = delta
-        #     gradient_w[i - 1] = np.dot(delta, activations[i - 1].T)
-        return gradient_b, gradient_w
-
     def _train_batch(self, x_batch, y_batch, epoch, learning_rate):
-        mb_len = len(x_batch)
-        # Списки, собирающие общий градиент после всех элементов в batch
-        gradient_biases = [np.zeros_like(layer.biases) for layer in self.layers]
-        gradient_weights = [np.zeros_like(layer.weights) for layer in self.layers]
-        for x, y_true in zip(x_batch, y_batch):
-            delta_gradient_biases, delta_gradient_weights = self._backpropagation(x, y_true)
-            gradient_biases = [grad + delta
-                               for grad, delta in zip(gradient_biases, delta_gradient_biases)]
-            gradient_weights = [grad + delta
-                                for grad, delta in zip(gradient_weights, delta_gradient_weights)]
-        # Обновление весов и смещений в соответствии с SGD
-        for layer, w, b in zip(self.layers, gradient_weights, gradient_biases):
-            layer.update(w / mb_len, b / mb_len, epoch, learning_rate)
+        activations = [x_batch]
+        for i, layer in enumerate(self.layers):
+            activations.append(layer.forward(activations[-1], is_training=True))
+        output = activations[-1]
+        grad_output = self.loss_function.deriv(y_batch, output)
+        for layer_index in range(len(self.layers) - 1, -1, -1):
+            layer = self.layers[layer_index]
+            grad_output = layer.backward(activations[layer_index], grad_output, learning_rate, epoch)
 
     def _check(self, verbose, epoch,
-               accuracy, loss_curve_mean,
-               loss_curve, accuracy_curve,
-               best_choice_loss, best_choice_accuracy,
-               best_loss_mean, best_accuracy,
-               loss_goal, accuracy_goal, check_type: str,
-               best_weights_and_biases):
+               n_train_samples, n_test_samples,
+               best_choice_train, best_choice_test,
+               train_loss, test_loss,
+               best_train_loss, best_test_loss,
+               train_correct_answers, test_correct_answers,
+               best_train_correct_answers, best_test_correct_answers,
+               loss_curve, accuracy_curve, accuracy_goal,
+               best_weights_and_biases,
+               is_test=False):
+        check_type = ['TRAIN', 'TEST'][is_test]
         stop_flag = False
+        loss = (test_loss if is_test else train_loss)
+        accuracy = (test_correct_answers / n_test_samples if is_test else train_correct_answers / n_train_samples)
         if epoch != 0:
-            loss_curve.append(loss_curve_mean)
-        if epoch != 0:
+            loss_curve.append(loss)
             accuracy_curve.append(accuracy)
-        # Проверка прогресса в конце каждой эпохи на тренировочных данных
         if verbose and epoch % verbose == 0:
-            print(f"{check_type.upper()} | Epoch: {epoch} | Loss: {loss_curve_mean} | Accuracy: {accuracy}")
-        if (best_choice_loss and best_choice_accuracy
-                and loss_curve_mean <= best_loss_mean and accuracy >= best_accuracy
-                or best_choice_loss and loss_curve_mean < best_loss_mean
-                or best_choice_accuracy and accuracy > best_accuracy):
-            best_loss_mean = loss_curve_mean
-            best_accuracy = accuracy
-            best_weights_and_biases = self.get_weights_and_biases()
-        loss_condition = loss_curve_mean <= loss_goal
-        accuracy_condition = accuracy >= accuracy_goal
-        if loss_condition and accuracy_condition:
-            if verbose:
-                print(f"{check_type.capitalize()} loss goal and {check_type.lower()} accuracy goal are reached")
+            print(f"{check_type} | Epoch: {epoch} | Loss: {loss} | Accuracy: {accuracy}")
+        if accuracy >= accuracy_goal:
             stop_flag = True
-        elif loss_condition:
-            if verbose:
-                print(f"{check_type.capitalize()} loss goal is reached")
-            stop_flag = True
-        elif accuracy_condition:
             if verbose:
                 print(f"{check_type.capitalize()} accuracy goal is reached")
-            stop_flag = True
-        return stop_flag, best_loss_mean, best_accuracy, best_weights_and_biases
+        tra = train_correct_answers - best_train_correct_answers
+        tsa = test_correct_answers - best_test_correct_answers
+        trl = train_loss - best_train_loss
+        tsl = test_loss - best_test_loss
+        f1 = tsa > 0
+        f2 = tsa == 0
+        f3 = tra > 0
+        f4 = tra == 0
+        f5 = tsl < 0
+        f6 = tsl == 0
+        f7 = trl < 0
+        f8 = trl == 0
+        if is_test and best_choice_train and best_choice_test:
+            correct_answers = train_correct_answers + test_correct_answers
+            loss = train_loss + test_loss
+            best_correct_answers = best_train_correct_answers + best_test_correct_answers
+            best_loss = best_train_loss + best_test_loss
+            ac_g = correct_answers > best_correct_answers
+            ac_e = correct_answers == best_correct_answers
+            lo_s = loss < best_loss
+            lo_e = loss == best_loss
+            if ac_g or ac_e and (f1 or f2 and (f3 or f4 and (lo_s or lo_e and (f5 or f6 and f7)))):
+                return stop_flag, train_loss, test_loss, \
+                       train_correct_answers, test_correct_answers, self.get_weights_and_biases()
+        elif is_test and best_choice_test and not best_choice_train:
+            if f1 or f2 and (f3 or f4 and (f5 or f6 and f7)):
+                return stop_flag, train_loss, test_loss, \
+                       train_correct_answers, test_correct_answers, self.get_weights_and_biases()
+        elif not is_test and best_choice_train and not best_choice_test:
+            if f3 or f4 and (f1 or f2 and (f7 or f8 and f5)):
+                return stop_flag, train_loss, test_loss, \
+                       train_correct_answers, test_correct_answers, self.get_weights_and_biases()
+        return stop_flag, best_train_loss, best_test_loss, \
+               best_train_correct_answers, best_test_correct_answers, best_weights_and_biases
 
     def fit(self,
             x: np.ndarray,
@@ -209,11 +177,8 @@ class MLPClassifier:
             upper_x_bounds: np.ndarray = None,
             train_accuracy_goal: float = 1.,
             test_accuracy_goal: float = 1.,
-            train_loss_goal: float = 0.,
-            test_loss_goal: float = 0.,
             shuffle: bool = True,
-            use_best_result: bool = True,
-            best_choice: frozenset = frozenset({'train_loss', 'train_accuracy'}),
+            best_choice: frozenset = frozenset({'train_accuracy', 'test_accuracy'}),
             re_fit: bool = True):
         """
         if batch_size == 1, then Stochastic Gradient Descent
@@ -221,7 +186,7 @@ class MLPClassifier:
         else Mini-batch Gradient Descent
         """
         has_test = ((test_x is not None) and (test_y is not None) and
-                    len(test_x) > 0 and len(test_y) > 0 and test_folds > 0)
+                    len(test_x) > 0 and len(test_y) > 0 and 1 <= test_folds <= len(test_x))
         if (x is not None) and (y is not None) and not (len(x) == len(y) >= 1):
             raise ValueError("Invalid sizes of the training dataset: %d vs %d" % (len(x), len(y)))
         if has_test and not (len(test_x) == len(test_y) >= 1):
@@ -233,99 +198,107 @@ class MLPClassifier:
             raise ValueError("Invalid number of inputs for training dataset: %d vs %d" % (self.n_inputs, x.shape[1]))
         if has_test and self.n_inputs != test_x.shape[1]:
             raise ValueError("Invalid number of inputs for test dataset: %d vs %d" % (self.n_inputs, test_x.shape[1]))
-        n_samples = x.shape[0]
+        n_train_samples = len(x)
+        n_test_samples = len(test_x) if test_x is not None else 0
         train_loss_curve = []
         test_loss_curve = []
         train_accuracy_curve = []
         test_accuracy_curve = []
-        best_train_accuracy = -np.inf
-        best_train_loss_mean = np.inf
-        best_test_accuracy = -np.inf
-        best_test_loss_mean = np.inf
+        best_train_correct_answers = 0
+        best_test_correct_answers = 0
+        best_train_loss = np.inf
+        best_test_loss = np.inf
         best_weights_and_biases = self.get_weights_and_biases()
         epoch = 0
-        best_choice_train_loss = 'train_loss' in best_choice
-        best_choice_train_accuracy = 'train_accuracy' in best_choice
-        best_choice_test_loss = 'test_loss' in best_choice
-        best_choice_test_accuracy = 'test_accuracy' in best_choice
-        new_loss_curve, correct_answers = self.evaluate(x, y, _input_is_prepared=True, _output_is_prepared=True)
+        best_choice_train = 'train_accuracy' in best_choice
+        best_choice_test = 'test_accuracy' in best_choice and has_test
+        tr_loss, train_correct_answers = self.evaluate(x, y, _input_is_prepared=True, _output_is_prepared=True)
+        tr_loss = tr_loss.mean()
         check_result = self._check(verbose, epoch,
-                                   correct_answers / n_samples, new_loss_curve.mean(),
-                                   train_loss_curve, train_accuracy_curve,
-                                   best_choice_train_loss, best_choice_train_accuracy,
-                                   best_train_loss_mean, best_train_accuracy,
-                                   train_loss_goal, train_accuracy_goal, 'train',
-                                   best_weights_and_biases)
-        stop_flag, best_train_loss_mean, best_train_accuracy, best_weights_and_biases = check_result
-        if stop_flag:
+                                   n_train_samples, n_test_samples,
+                                   best_choice_train, best_choice_test,
+                                   tr_loss, np.inf,
+                                   best_train_loss, best_test_loss,
+                                   train_correct_answers, 0,
+                                   best_train_correct_answers, best_test_correct_answers,
+                                   train_loss_curve, train_accuracy_curve, train_accuracy_goal,
+                                   best_weights_and_biases,
+                                   is_test=False)
+        tr_stop_flag, best_train_loss, best_test_loss, best_train_correct_answers, best_test_correct_answers, best_weights_and_biases = check_result
+        if not has_test and tr_stop_flag:
             return epoch, train_loss_curve, train_accuracy_curve, test_loss_curve, test_accuracy_curve
         if has_test:
-            new_loss_curve, correct_answers = self.evaluate(test_x, test_y, _input_is_prepared=True,
-                                                            _output_is_prepared=True)
+            ts_loss, test_correct_answers = self.evaluate(test_x, test_y, _input_is_prepared=True,
+                                                          _output_is_prepared=True)
+            ts_loss = ts_loss.mean()
             check_result = self._check(verbose, epoch,
-                                       correct_answers / test_x.shape[0], new_loss_curve.mean(),
-                                       test_loss_curve, test_accuracy_curve,
-                                       best_choice_test_loss, best_choice_test_accuracy,
-                                       best_test_loss_mean, best_test_accuracy,
-                                       test_loss_goal, test_accuracy_goal, 'test',
-                                       best_weights_and_biases)
-            stop_flag, best_test_loss_mean, best_test_accuracy, best_weights_and_biases = check_result
-            if stop_flag:
+                                       n_train_samples, n_test_samples,
+                                       best_choice_train, best_choice_test,
+                                       tr_loss, ts_loss,
+                                       best_train_loss, best_test_loss,
+                                       train_correct_answers, test_correct_answers,
+                                       best_train_correct_answers, best_test_correct_answers,
+                                       test_loss_curve, test_accuracy_curve, test_accuracy_goal,
+                                       best_weights_and_biases,
+                                       is_test=True)
+            ts_stop_flag, best_train_loss, best_test_loss, best_train_correct_answers, best_test_correct_answers, best_weights_and_biases = check_result
+            if tr_stop_flag or ts_stop_flag:
                 return epoch, train_loss_curve, train_accuracy_curve, test_loss_curve, test_accuracy_curve
         for epoch in range(1, epochs + 1):
             if shuffle:
-                indices = np.arange(n_samples)
+                indices = np.arange(n_train_samples)
                 np.random.shuffle(indices)
                 x = x[indices]
                 y = y[indices]
-            batches = [(x[i:i + batch_size], y[i:i + batch_size]) for i in range(0, len(x), batch_size)]
+            batches = ((x[i:i + batch_size], y[i:i + batch_size]) for i in range(0, len(x), batch_size))
             for x_batch, y_batch in batches:
                 self._train_batch(x_batch, y_batch, epoch, learning_rate)
-            new_loss_curve, correct_answers = self.evaluate(x, y, _input_is_prepared=True, _output_is_prepared=True)
+            tr_loss, train_correct_answers = self.evaluate(x, y, _input_is_prepared=True, _output_is_prepared=True)
+            tr_loss = tr_loss.mean()
             check_result = self._check(verbose, epoch,
-                                       correct_answers / n_samples, new_loss_curve.mean(),
-                                       train_loss_curve, train_accuracy_curve,
-                                       best_choice_train_loss, best_choice_train_accuracy,
-                                       best_train_loss_mean, best_train_accuracy,
-                                       train_loss_goal, train_accuracy_goal, 'train',
-                                       best_weights_and_biases)
-            stop_flag, best_train_loss_mean, best_train_accuracy, best_weights_and_biases = check_result
+                                       n_train_samples, n_test_samples,
+                                       best_choice_train, best_choice_test,
+                                       tr_loss, np.inf,
+                                       best_train_loss, best_test_loss,
+                                       train_correct_answers, 0,
+                                       best_train_correct_answers, best_test_correct_answers,
+                                       train_loss_curve, train_accuracy_curve, train_accuracy_goal,
+                                       best_weights_and_biases,
+                                       is_test=False)
+            tr_stop_flag, best_train_loss, best_test_loss, best_train_correct_answers, best_test_correct_answers, best_weights_and_biases = check_result
+            if not has_test and tr_stop_flag:
+                break
             if has_test:
-                test_len = test_x.shape[0]
-                if shuffle:
-                    indices = np.arange(test_len)
-                    np.random.shuffle(indices)
-                    test_x = test_x[indices]
-                    test_y = test_y[indices]
-                folds = int(np.ceil(test_len / test_folds))
-                test_folds_data = [[test_x[i:i + folds], test_y[i:i + folds]] for i in
-                                   range(0, test_len, folds)]
-                test_fold_loss_sum = 0.
-                test_fold_accuracy_sum = 0.
+                folds = int(np.ceil(n_test_samples / test_folds))
+                test_folds_data = ([test_x[i:i + folds], test_y[i:i + folds]] for i in
+                                   range(0, n_test_samples, folds))
+                test_folds_loss = 0.
+                test_correct_answers = 0.
                 for fold, (vx, vy) in enumerate(test_folds_data, 1):
-                    test_fold_loss_curve, correct_answers = self.evaluate(vx, vy,
-                                                                          _input_is_prepared=True,
-                                                                          _output_is_prepared=True)
+                    test_fold_loss_curve, test_fold_correct_answers = self.evaluate(vx, vy, _input_is_prepared=True,
+                                                                                    _output_is_prepared=True)
                     test_fold_loss_curve_sum = test_fold_loss_curve.sum()
                     p_loss = test_fold_loss_curve_sum / vx.shape[0]
-                    p_accuracy = correct_answers / vx.shape[0]
-                    test_fold_loss_sum += test_fold_loss_curve_sum
-                    test_fold_accuracy_sum += correct_answers
-                    if verbose and epoch % verbose == 0:
+                    p_accuracy = test_fold_correct_answers / vx.shape[0]
+                    if verbose and epoch % verbose == 0 and test_folds != 1:
                         print(f"TEST FOLD {fold} | Epoch: {epoch} | Loss: {p_loss} | Accuracy: {p_accuracy}")
-                test_fold_loss_sum_mean = test_fold_loss_sum / test_len
-                test_fold_accuracy_sum_mean = test_fold_accuracy_sum / test_len
-                check_result = self._check(0, epoch,
-                                           test_fold_accuracy_sum_mean, test_fold_loss_sum_mean,
-                                           test_loss_curve, test_accuracy_curve,
-                                           best_choice_test_loss, best_choice_test_accuracy,
-                                           best_test_loss_mean, best_test_accuracy,
-                                           test_loss_goal, test_accuracy_goal, 'test',
-                                           best_weights_and_biases)
-                stop_flag, best_test_loss_mean, best_test_accuracy, best_weights_and_biases = check_result
-            if stop_flag:
-                break
-        if use_best_result:
+                    test_folds_loss += test_fold_loss_curve_sum
+                    test_correct_answers += test_fold_correct_answers
+                ts_loss = test_folds_loss / n_test_samples
+                check_result = self._check(verbose, epoch,
+                                           n_train_samples, n_test_samples,
+                                           best_choice_train, best_choice_test,
+                                           tr_loss, ts_loss,
+                                           best_train_loss, best_test_loss,
+                                           train_correct_answers, test_correct_answers,
+                                           best_train_correct_answers, best_test_correct_answers,
+                                           test_loss_curve, test_accuracy_curve, test_accuracy_goal,
+                                           best_weights_and_biases,
+                                           is_test=True)
+                ts_stop_flag, best_train_loss, best_test_loss, best_train_correct_answers, best_test_correct_answers, best_weights_and_biases = check_result
+                if tr_stop_flag or ts_stop_flag:
+                    break
+        if best_choice:
             self._set_weights_and_biases(best_weights_and_biases)
         return epoch, train_loss_curve, train_accuracy_curve, test_loss_curve, test_accuracy_curve
 

@@ -52,9 +52,9 @@ class PreparedData:
     def prepare_x_dim(x):
         n_samples = x.shape[0]
         if x.ndim == 1:
-            x = x.reshape((n_samples, 1, 1))
+            x = x.reshape((n_samples, 1))
         elif x.ndim >= 2:
-            x = x.reshape((n_samples, np.product(x.shape[1:]), 1))
+            x = x.reshape((n_samples, np.product(x.shape[1:])))
         return x
 
     def prepare_x_values(self, x, _update=False):
@@ -101,8 +101,8 @@ class PreparedData:
             self.min_x = np.minimum(self.min_x, 0.)
             self.max_x = np.maximum(self.max_x, 1.)
         min_max = self.max_x - self.min_x
-        min_max[min_max < self.epsilon] = 1.
-        return np.nan_to_num((x - self.min_x) / min_max)
+        with np.errstate(all='ignore'):
+            return np.nan_to_num((x - self.min_x) / min_max)
 
     def prepare_y(self, y, _update=False):
         y = deepcopy(y)
@@ -140,15 +140,13 @@ class PreparedData:
 
     def fit(self, x, y, test_x, test_y, lower_x_bounds, upper_x_bounds, re_fit):
         has_test = False
-        if (test_x is not None) and (test_y is not None):
+        if (test_x is not None) and (test_y is not None) and len(test_x) > 0 and len(test_y) > 0:
             test_x = np.asarray(test_x)
             test_y = np.asarray(test_y)
-            has_test = (test_x.shape[0] > 0) and (test_y.shape[0] > 0)
+            has_test = True
         x = np.asarray(x)
         y = np.asarray(y)
-        test_x = np.asarray(test_x) if test_x is not None else None
-        test_y = np.asarray(test_y) if test_y is not None else None
-        if test_x is not None:
+        if has_test:
             test_x = self.prepare_x_dim(test_x)
         y = self.prepare_y(y, _update=re_fit)
         x = PreparedData.prepare_x_dim(deepcopy(x))

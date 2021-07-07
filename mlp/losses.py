@@ -17,10 +17,10 @@ class MSE:
         return 'mse'
 
     def __call__(self, y_true, y_predict):
-        return np.square(y_predict - y_true) / _get_size(y_true, 1)
+        return np.square(y_predict - y_true.reshape(-1, 1)) / _get_size(y_true, 1)
 
     def deriv(self, y_true, y_predict):
-        return 2. * (y_predict - y_true) / _get_size(y_true, 1)
+        return 2. * (y_predict - y_true.reshape(-1, 1)) / _get_size(y_true, 1)
 
 
 class SSE:
@@ -31,10 +31,10 @@ class SSE:
         return 'sse'
 
     def __call__(self, y_true, y_predict):
-        return np.square(y_predict - y_true)
+        return np.square(y_predict - y_true.reshape(-1, 1))
 
     def deriv(self, y_true, y_predict):
-        return y_predict - y_true
+        return y_predict - y_true.reshape(-1, 1)
 
 
 class MAE:
@@ -45,10 +45,10 @@ class MAE:
         return 'mae'
 
     def __call__(self, y_true, y_predict):
-        return np.abs(y_predict - y_true) / _get_size(y_true, 1)
+        return np.abs(y_predict - y_true.reshape(-1, 1)) / _get_size(y_true, 1)
 
     def deriv(self, y_true, y_predict):
-        return np.sign(y_predict - y_true) / _get_size(y_true, 1)
+        return np.sign(y_predict - y_true.reshape(-1, 1)) / _get_size(y_true, 1)
 
 
 class SAE:
@@ -59,24 +59,32 @@ class SAE:
         return 'sae'
 
     def __call__(self, y_true, y_predict):
-        return np.abs(y_predict - y_true)
+        return np.abs(y_predict - y_true.reshape(-1, 1))
 
     def deriv(self, y_true, y_predict):
-        return np.sign(y_predict - y_true)
+        return np.sign(y_predict - y_true.reshape(-1, 1))
 
 
-class SDE:
-    """For XOR example"""
+class SMCE:
+    """SoftMax Cross Entropy with logits"""
 
     @staticmethod
     def name():
-        return 'sde'
+        return 'smce'
 
     def __call__(self, y_true, y_predict):
-        return np.abs(y_predict - y_true)
+        with np.errstate(all='ignore'):
+            logits_for_answers = y_predict[np.arange(y_predict.shape[0]), y_true]
+            return np.nan_to_num(-logits_for_answers + np.log(np.sum(np.exp(y_predict), axis=-1)),
+                                 posinf=100, neginf=100)
 
     def deriv(self, y_true, y_predict):
-        return y_predict - y_true
+        with np.errstate(all='ignore'):
+            ones_for_answers = np.zeros_like(y_predict)
+            ones_for_answers[np.arange(ones_for_answers.shape[0]), y_true] = 1
+            softmax = np.nan_to_num(np.exp(y_predict) / np.exp(y_predict).sum(axis=-1, keepdims=True),
+                                    posinf=100, neginf=100)
+            return -ones_for_answers + softmax
 
 
 loss_functions = {
@@ -84,7 +92,7 @@ loss_functions = {
     'sse': SSE,
     'mae': MAE,
     'sae': SAE,
-    'sde': SDE
+    'smce': SMCE
 }
 
 

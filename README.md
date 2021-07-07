@@ -1,26 +1,42 @@
 # NN-Data-Classification
 
-[![made-with-python](https://img.shields.io/badge/Made_with-Python_3.6-1f425f?style=plastic)](https://www.python.org/) ![dev-status](https://img.shields.io/badge/Dev_Status-100%25-success?style=plastic)
+[![made-with-python](https://img.shields.io/badge/Made_with-Python_3.6-1f425f?style=plastic)](https://www.python.org/) ![dev-status](https://img.shields.io/badge/Dev_Status-97.5%25-yellowgreen?style=plastic)
 
 **Note for GitHub users:**  
-In a few months, there will be a reworking of all code and results.
+1. Code and results in rework.
+2. Repository size: 248.4 MiB ('rs' folder: 248 MiB).
 
 ## How to run?
 
 ### Install requirements
+
+#### For using datasets
 ```
-numpy==1.19.5
-bidict==0.21.2
-matplotlib==3.3.4
-seaborn==0.11.1
 emnist==0.0
 scikit-learn==0.24.1
+tensorflow==2.5.0
+```
+
+#### For mlp lib
+```
+numpy==1.19.2
+bidict==0.21.2
+```
+
+#### For main_example.py and mnist_example.py
+```
+matplotlib==3.0.2
+seaborn==0.9.0
 ```
 
 ### Run
 Main example:
 ```
 $ python3.6 main_example.py
+```
+MNIST example:
+```
+$ python3.6 mnist_example.py
 ```
 XOR example:
 ```
@@ -33,10 +49,14 @@ The program is designed for data classification by a neural network.
 All data is first converted to a numeric type. If the data are string identifiers, they are converted to numeric identifiers (sequentially starting with 0).
 
 Neural networks used:
-1. ![MLP-needs-some-work](https://img.shields.io/badge/Multi--layer_perceptron_with_back_propagation_(MLPClassifier)-needs_refactoring-success?style=flat-square)
+1. ![MLP-done](https://img.shields.io/badge/Multi--layer_perceptron_with_back_propagation_(MLPClassifier)-done-success?style=flat-square)
     * Layers:
         * Dense
-    * Optimizers: 
+        * ReluLayer
+        * LeakyReluLayer
+        * SwishLayer
+        * Dropout
+    * Optimizers:
         * Gradient descent
         * Gradient descent with momentum
         * AdaGrad (Adaptive Gradient Algorithm)
@@ -51,7 +71,7 @@ Neural networks used:
         * Tanh
         * SoftMax
         * HardLim
-2. ![CPN-needs-some-work](https://img.shields.io/badge/Kohonen--Grossberg_counter_propagation_network_(CPClassifier)-needs_refactoring-success?style=flat-square)
+2. ![CPN-done](https://img.shields.io/badge/Kohonen--Grossberg_counter_propagation_network_(CPClassifier)-done-success?style=flat-square)
     * Layers:
         * Kohonen
         * Grossberg
@@ -82,53 +102,34 @@ Neural networks used:
 * SSE (Sum Squared Error)
 * MAE (Mean Absolute Error)
 * SAE (Sum Absolute Error)
-* SDE (for XOR example)
+* SMCE (SoftMax Cross Entropy)
 
 ## Results
 
-### MLPClassifier Results (1 layer, «Net 1»)
-Choice: train_loss, train_accuracy
+### MLPClassifier Results («Net 1»)
+Best choice: test_accuracy
 
-|     Dataset     |                          Dataset info                                  | Train Accuracy | Test Accuracy |                               Result Folder                          |
-|:---------------:|:----------------------------------------------------------------------:|:--------------:|:-------------:|:--------------------------------------------------------------------:|
-| EMNIST Balanced | Train: 112.800<br>Test: 18.800<br>Classes: 47<br>Features: 784 (28x28) |     69.85%     |     67.27%    | /rs/EMNIST/Balanced/One layer/<br>Epochs: 30<br>Time: 1902 s. ≈ 31 m.|
-|  EMNIST Letters | Train: 124.800<br>Test: 20.800<br>Classes: 26<br>Features: 784 (28x28) |     70.70%     |     69.39%    |  /rs/EMNIST/Letters/One layer/<br>Epochs: 18<br>Time: 978 s. ≈ 16 m. |
-|  EMNIST Digits  | Train: 240.000<br>Test: 40.000<br>Classes: 10<br>Features: 784 (28x28) |     92.67%     |     92.45%    |  /rs/EMNIST/Digits/One layer/<br>Epochs: 4<br>Time: 66 s. ≈ 1 m.     |
-|      MNIST      |  Train: 60.000<br>Test: 10.000<br>Classes: 10<br>Features: 784 (28x28) |     93.70%     |     93.01%    |   /rs/EMNIST/MNIST/One layer/<br>Epochs: 98<br>Time: 437 s. ≈ 7 m.   |
-|      Sonar      |               Train: 208<br>Classes: 2<br>Features: 60                 |     97.59%     |       —       |      /rs/Sonar Dataset/One layer/<br>Epochs: 763<br>Time: 7 s.       |
-|       Wine      |               Train: 178<br>Classes: 3<br>Features: 13                 |      100%      |       —       |           /rs/Wine/One layer/<br>Epochs: 94<br>Time: 0.81 s.         |
+|     Dataset     |                              Dataset info                              | Best Train Accuracy | Best Test Accuracy | Epoch | Time |         Path        |
+|:---------------:|:----------------------------------------------------------------------:|:-------------------:|:------------------:|:-----:|:----:|:-------------------:|
+| EMNIST Balanced | Train: 112.800<br>Test: 18.800<br>Classes: 47<br>Features: 784 (28x28) |        92.26%       |       86.44%       |   39  |  4m  | rs/EMNIST Balanced/ |
+|  EMNIST Letters | Train: 124.800<br>Test: 20.800<br>Classes: 26<br>Features: 784 (28x28) |        96.56%       |       92.70%       |   36  |  4m  |  rs/EMNIST Letters/ |
+|  EMNIST Digits  | Train: 240.000<br>Test: 40.000<br>Classes: 10<br>Features: 784 (28x28) |        99.94%       |       99.38%       |   63  |  11m |  rs/EMNIST Digits/  |
+|       Iris      |                 Train: 150<br>Classes: 3<br>Features: 4                |         100%        |          -         |  4822 |  3s  |       rs/Iris/      |
 
+### CPClassifier Results («Net 2»)
+Best choice: train_accuracy
 
-### MLPClassifier Results (2 layers, «Net 2»)
-Choice: train_loss, train_accuracy
-
-|     Dataset     |                          Dataset info                                  | Train Accuracy | Test Accuracy |                               Result Folder                                          |
-|:---------------:|:----------------------------------------------------------------------:|:--------------:|:-------------:|:------------------------------------------------------------------------------------:|
-| EMNIST Balanced | Train: 112.800<br>Test: 18.800<br>Classes: 47<br>Features: 784 (28x28) |     89.44%     |     79.79%    | /rs/EMNIST/Balanced/Two layers/<br>Epochs: 98<br>Time: 16990 s. ≈ 5 h.<br>120 neurons|
-|  EMNIST Letters | Train: 124.800<br>Test: 20.800<br>Classes: 26<br>Features: 784 (28x28) |     92.78%     |     86.40%    |  /rs/EMNIST/Letters/Two layers/<br>Epochs: 89<br>Time: 15081 s. ≈ 4 h.<br>120 neurons|
-|  EMNIST Digits  | Train: 240.000<br>Test: 40.000<br>Classes: 10<br>Features: 784 (28x28) |     99.70%     |     98.76%    |  /rs/EMNIST/Digits/Two layers/<br>Epochs: 91<br>Time: 28746 s. ≈ 8 h.<br>120 neurons |
-|      MNIST      |  Train: 60.000<br>Test: 10.000<br>Classes: 10<br>Features: 784 (28x28) |     99.70%     |     98.11%    |   /rs/EMNIST/MNIST/Two layers/<br>Epochs: 100<br>Time: 7808 s. ≈ 2 h.<br>100 neurons |
-|      Sonar      |               Train: 208<br>Classes: 2<br>Features: 60                 |      100%      |       —       |      /rs/Sonar Dataset/Two layers/<br>Epochs: 80<br>Time: 1.68 s.<br>80 neurons      |
-|       Wine      |               Train: 178<br>Classes: 3<br>Features: 13                 |      100%      |       —       |           /rs/Wine/Two layers/<br>Epochs: 21<br>Time: 0.33 s.<br>80 neurons          |
-
-### CPClassifier Results («Net 3»)
-Choice: train_loss, train_accuracy
-
-|     Dataset     |                          Dataset info                                  | Train Accuracy | Test Accuracy |                          Result Folder                                                  |
-|:---------------:|:----------------------------------------------------------------------:|:--------------:|:-------------:|:---------------------------------------------------------------------------------------:|
-| EMNIST Balanced | Train: 112.800<br>Test: 18.800<br>Classes: 47<br>Features: 784 (28x28) |     31.05%     |     31.12%    | /rs/EMNIST/Balanced/CPN/<br>Epochs: 100<br>Time: 4943 s. ≈ 82 m.<br>120 Kohonen neurons |
-|  EMNIST Letters | Train: 124.800<br>Test: 20.800<br>Classes: 26<br>Features: 784 (28x28) |      6.10%     |      5.97%    | /rs/EMNIST/Letters/CPN/<br>Epochs: 100<br>Time: 5285 s. ≈ 88 m.<br>120 Kohonen neurons  |
-|  EMNIST Digits  | Train: 240.000<br>Test: 40.000<br>Classes: 10<br>Features: 784 (28x28) |     33.58%     |     33.59%    | /rs/EMNIST/Digits/CPN/<br>Epochs: 100<br>Time: 10038 s. ≈ 3 h.<br>120 Kohonen neurons   |
-|      MNIST      |  Train: 60.000<br>Test: 10.000<br>Classes: 10<br>Features: 784 (28x28) |     36.14%     |     36.21%    | /rs/EMNIST/MNIST/CPN/<br>Epochs: 97<br>Time: 2227 s. ≈ 37 m.<br>100 Kohonen neurons     |
-|      Sonar      |               Train: 208<br>Classes: 2<br>Features: 60                 |      100%      |       —       |      /rs/Sonar Dataset/CPN/<br>Epochs: 7<br>Time: 4.392 s.<br>200 Kohonen neurons       |
-|       Wine      |               Train: 178<br>Classes: 3<br>Features: 13                 |      100%      |       —       |          /rs/Wine/CPN/<br>Epochs: 11<br>Time: 2.613 s.<br>80 Kohonen neurons            |
+|     Dataset     |                              Dataset info                              | Best Train Accuracy | Best Test Accuracy | Epoch |  Time  |    Path    |
+|:---------------:|:----------------------------------------------------------------------:|:-------------------:|:------------------:|:-----:|:------:|:----------:|
+|       Wine      |                 Train: 178<br>Classes: 3<br>Features: 13               |         100%        |          -         |   35  |  0.4s  |  rs/Wine/  |
+|       Iris      |                 Train: 150<br>Classes: 3<br>Features: 4                |         100%        |          -         |    1  |  0.04s |  rs/Iris/  |
 
 In the case where the number of neurons of the counter-propagation network coincides with the number of samples, one epoch is enough for an accuracy of 100% (however, such training lasts a very long time; 6 and a half hours per MNIST dataset, size of this network in json ~466.5 MB; in experiments, such a network is not considered).  
 <img src='./MNIST.%2060000%20neurons.png' alt='MNIST-60000-neurons-result-100-97.5' width='800px'>
 
 ### Experiments
 
-![experiments-done](https://img.shields.io/badge/Experiments-done-success?style=flat-square)
+![experiments-in-process](https://img.shields.io/badge/Experiments-in_process-yellowgreen?style=flat-square)
 
 1. **Experiment #1**  
    Study of the effect of image deviation from the reference (at different points of the image) on recognition quality. One of the reference images is taken as the original recognized image and adjusted so that there is no one, two, etc., pixels in the image of the reference. The experiment is conducted for several cases (no pixels in different areas of the image) for all standards. In this case, different neural networks are compared.

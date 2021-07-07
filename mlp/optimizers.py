@@ -49,8 +49,8 @@ class GradientDescentMomentum:
 
     def __init__(self, input_channel, output_channel, beta=None, vdw=None, vdb=None):
         self.beta = beta or 0.9
-        self.vdw = vdw or np.zeros((output_channel, input_channel))
-        self.vdb = vdb or np.zeros((output_channel, 1))
+        self.vdw = vdw or np.zeros((input_channel, output_channel))
+        self.vdb = vdb or np.zeros((output_channel,))
 
     def __call__(self, weights, biases, dw, db, learning_rate, _):
         self.vdw = self.beta * self.vdw + (1. - self.beta) * dw
@@ -82,8 +82,8 @@ class AdaGrad:
         return 'adagrad'
 
     def __init__(self, input_channel, output_channel, vdw=None, vdb=None, epsilon=None):
-        self.vdw = vdw or np.zeros((output_channel, input_channel))
-        self.vdb = vdb or np.zeros((output_channel, 1))
+        self.vdw = vdw or np.zeros((input_channel, output_channel))
+        self.vdb = vdb or np.zeros((output_channel,))
         self.epsilon = epsilon or 1e-8
 
     def __call__(self, weights, biases, dw, db, learning_rate, _):
@@ -110,7 +110,7 @@ class AdaDelta:
     https://medium.com/@srv96/adadelta-an-adoptive-learning-rate-method-108534e6be3f
     from the article: learning_rate = 0.01
     But this AdaDelta implementation requires a large learning rate
-    For example: 25 or 50 or 75 or 100 or 125 ...
+    For example: 1 or 10 or 25 or 50 or 75...
     """
 
     @staticmethod
@@ -122,10 +122,10 @@ class AdaDelta:
                  vdw=None, vdb=None, vdw2=None, vdb2=None,
                  epsilon=1e-8, learning_rate=None, decay=0.):
         self.beta = beta
-        self.vdw = vdw or np.zeros((output_channel, input_channel))
-        self.vdb = vdb or np.zeros((output_channel, 1))
-        self.vdw2 = vdw2 or np.zeros((output_channel, input_channel))
-        self.vdb2 = vdb2 or np.zeros((output_channel, 1))
+        self.vdw = vdw or np.zeros((input_channel, output_channel))
+        self.vdb = vdb or np.zeros((output_channel,))
+        self.vdw2 = vdw2 or np.zeros((input_channel, output_channel))
+        self.vdb2 = vdb2 or np.zeros((output_channel,))
         self.epsilon = epsilon
         self.learning_rate = learning_rate
         self.decay = decay
@@ -142,7 +142,7 @@ class AdaDelta:
         self.vdb2 = self.beta * self.vdb2 + (1. - self.beta) * v_b ** 2
         theta_w = self.learning_rate * v_w
         theta_b = self.learning_rate * v_b
-        self.learning_rate = self.learning_rate / (1. + self.decay * self.iterations)
+        self.learning_rate /= 1. + self.decay * self.iterations
         self.iterations += 1
         return [
             weights - theta_w,
@@ -183,8 +183,8 @@ class RMSprop:
     def __init__(self, input_channel, output_channel, beta=None,
                  vdw=None, vdb=None, epsilon=None):
         self.beta = beta or 0.9
-        self.vdw = vdw or np.zeros((output_channel, input_channel))
-        self.vdb = vdb or np.zeros((output_channel, 1))
+        self.vdw = vdw or np.zeros((input_channel, output_channel))
+        self.vdb = vdb or np.zeros((output_channel,))
         self.epsilon = epsilon or 1e-8
 
     def __call__(self, weights, biases, dw, db, learning_rate, _):
@@ -223,10 +223,10 @@ class Adam:
                  mdw=None, mdb=None, vdw=None, vdb=None, epsilon=None):
         self.beta1 = beta1 or 0.9
         self.beta2 = beta2 or 0.999
-        self.mdw = mdw or np.zeros((output_channel, input_channel))
-        self.mdb = mdb or np.zeros((output_channel, 1))
-        self.vdw = vdw or np.zeros((output_channel, input_channel))
-        self.vdb = vdb or np.zeros((output_channel, 1))
+        self.mdw = mdw or np.zeros((input_channel, output_channel))
+        self.mdb = mdb or np.zeros((output_channel,))
+        self.vdw = vdw or np.zeros((input_channel, output_channel))
+        self.vdb = vdb or np.zeros((output_channel,))
         self.epsilon = epsilon or 1e-8
 
     def __call__(self, weights, biases, dw, db, learning_rate, current_epoch):
@@ -277,10 +277,10 @@ class AdaMax:
                  epsilon=None):
         self.beta1 = beta1 or 0.9
         self.beta2 = beta2 or 0.999
-        self.sdw = sdw or np.zeros((output_channel, input_channel))
-        self.sdb = sdb or np.zeros((output_channel, 1))
-        self.vdw = vdw or np.zeros((output_channel, input_channel))
-        self.vdb = vdb or np.zeros((output_channel, 1))
+        self.sdw = sdw or np.zeros((input_channel, output_channel))
+        self.sdb = sdb or np.zeros((output_channel,))
+        self.vdw = vdw or np.zeros((input_channel, output_channel))
+        self.vdb = vdb or np.zeros((output_channel,))
         self.epsilon = epsilon or 1e-8
 
     def __call__(self, weights, biases, dw, db, learning_rate, current_epoch):
